@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>자산택 — 장비 관리</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#14171C; --surface:#1C2027; --surface-2:#242933; --line:#2E3440;
+    --text:#E8EAEE; --muted:#8B93A0;
+    --accent:#FF8A3D; --accent-dim:#3A2A1C;
+    --ok:#3DDC97; --ok-dim:#1B2E27;
+    --warn:#F0C020; --warn-dim:#332C14;
+    --danger:#FF5D5D; --danger-dim:#331A1A;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{background:var(--bg); color:var(--text); font-family:'IBM Plex Sans KR', -apple-system, sans-serif; min-height:100vh; -webkit-tap-highlight-color:transparent;}
+  .mono{font-family:'IBM Plex Mono', monospace;}
+  header{position:sticky; top:0; z-index:20; background:linear-gradient(180deg, #14171C 85%, transparent); padding:16px 16px 8px; border-bottom:1px solid var(--line);}
+  .brand{display:flex; align-items:center; gap:10px;}
+  .brand .tag{width:34px;height:34px;border-radius:8px; background:repeating-linear-gradient(90deg, var(--accent) 0 3px, transparent 3px 6px, var(--accent) 6px 8px, transparent 8px 11px); flex:0 0 auto;}
+  .brand h1{font-size:18px; margin:0; letter-spacing:.2px;}
+  .brand p{margin:1px 0 0; font-size:12px; color:var(--muted);}
+  nav{display:flex; gap:6px; margin-top:14px; overflow-x:auto; padding-bottom:2px;}
+  nav button{flex:0 0 auto; background:transparent; border:1px solid var(--line); color:var(--muted); padding:8px 13px; border-radius:999px; font-size:12.5px; font-weight:500; cursor:pointer; transition:.15s; white-space:nowrap;}
+  nav button.active{background:var(--accent); border-color:var(--accent); color:#1a1200;}
+  main{padding:16px; max-width:640px; margin:0 auto; padding-bottom:80px;}
+  .view{display:none;}
+  .view.active{display:block;}
+  .card{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:16px; margin-bottom:12px;}
+  .card h2{font-size:14px; margin:0 0 10px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.06em;}
+  button.primary{background:var(--accent); color:#1a1200; border:none; border-radius:8px; padding:12px 16px; font-weight:600; font-size:14px; cursor:pointer; width:100%;}
+  button.secondary{background:transparent; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:11px 16px; font-weight:500; font-size:14px; cursor:pointer; width:100%;}
+  button.small{background:var(--surface-2); color:var(--text); border:1px solid var(--line); border-radius:6px; padding:6px 10px; font-size:12px; cursor:pointer;}
+  button:disabled{opacity:.5; cursor:not-allowed;}
+  button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+  input, textarea, select{width:100%; background:var(--surface-2); border:1px solid var(--line); color:var(--text); border-radius:8px; padding:10px 12px; font-size:14px; font-family:inherit; margin-top:4px;}
+  label{font-size:12px; color:var(--muted); display:block; margin-top:10px;}
+  .row{display:flex; gap:8px;}
+  .row > *{flex:1;}
+  .badge{display:inline-block; padding:2px 9px; border-radius:999px; font-size:11px; font-weight:600;}
+  .badge.ok{background:var(--ok-dim); color:var(--ok);}
+  .badge.warn{background:var(--warn-dim); color:var(--warn);}
+  .badge.danger{background:var(--danger-dim); color:var(--danger);}
+  .badge.muted{background:var(--surface-2); color:var(--muted);}
+  .asset-item{display:flex; gap:12px; padding:12px; border:1px solid var(--line); border-radius:8px; margin-bottom:8px; background:var(--surface-2); cursor:pointer;}
+  .asset-item .strip{width:5px; border-radius:3px; background:repeating-linear-gradient(180deg, var(--accent) 0 4px, transparent 4px 7px);}
+  .asset-item .body{flex:1; min-width:0;}
+  .asset-item .top{display:flex; justify-content:space-between; align-items:baseline; gap:8px;}
+  .asset-item .name{font-weight:600; font-size:14px;}
+  .asset-item .meta{font-size:12px; color:var(--muted); margin-top:3px;}
+  .asset-item .code{font-size:11px; color:var(--muted); margin-top:4px;}
+  .empty{text-align:center; padding:36px 16px; color:var(--muted);}
+  .empty .big{font-size:32px; margin-bottom:8px;}
+  .stat-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;}
+  .stat{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:14px;}
+  .stat .num{font-size:26px; font-weight:700; font-family:'IBM Plex Mono';}
+  .stat .lbl{font-size:12px; color:var(--muted); margin-top:2px;}
+  .bar-row{display:flex; align-items:center; gap:8px; margin:8px 0; font-size:13px;}
+  .bar-row .lbl{width:76px; flex:0 0 auto; color:var(--muted); font-size:12px;}
+  .bar-track{flex:1; height:10px; background:var(--surface-2); border-radius:5px; overflow:hidden;}
+  .bar-fill{height:100%; background:var(--accent); border-radius:5px;}
+  .bar-row .cnt{width:26px; text-align:right; font-family:'IBM Plex Mono'; font-size:12px; color:var(--muted);}
+  .chat-log{display:flex; flex-direction:column; gap:10px; margin-bottom:12px; min-height:80px;}
+  .msg{padding:10px 12px; border-radius:10px; font-size:14px; line-height:1.5; max-width:92%;}
+  .msg.user{align-self:flex-end; background:var(--accent-dim); border:1px solid #4a3320;}
+  .msg.ai{align-self:flex-start; background:var(--surface-2); border:1px solid var(--line); white-space:pre-wrap;}
+  .chip-row{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px;}
+  .chip{background:var(--surface-2); border:1px solid var(--line); color:var(--muted); padding:6px 10px; border-radius:999px; font-size:12px; cursor:pointer;}
+  .chip.active{background:var(--accent); color:#1a1200; border-color:var(--accent);}
+  .match-card{background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:10px; margin-top:6px;}
+  .match-card .diff{font-size:13px; margin:4px 0;}
+  .match-card .diff .from{color:var(--danger); text-decoration:line-through;}
+  .match-card .diff .to{color:var(--ok); font-weight:600;}
+  .match-actions{display:flex; gap:6px; margin-top:8px;}
+  .match-actions button{flex:1;}
+  .modal-bg{position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:50; display:none; align-items:flex-end; justify-content:center;}
+  .modal-bg.active{display:flex;}
+  .modal{background:var(--surface); border:1px solid var(--line); border-radius:16px 16px 0 0; width:100%; max-width:640px; padding:18px; max-height:88vh; overflow-y:auto;}
+  .modal h3{margin:0 0 4px; font-size:16px;}
+  .modal .sub{font-size:12px; color:var(--muted); margin-bottom:6px; font-family:'IBM Plex Mono';}
+  .close-x{float:right; background:none; border:none; color:var(--muted); font-size:20px; cursor:pointer; line-height:1;}
+  .toast{position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--surface-2); border:1px solid var(--line); color:var(--text); padding:10px 16px; border-radius:8px; font-size:13px; z-index:60; opacity:0; transition:opacity .25s; pointer-events:none; max-width:88%; text-align:center;}
+  .toast.show{opacity:1;}
+  .spin{width:16px; height:16px; border:2px solid var(--muted); border-top-color:var(--accent); border-radius:50%; display:inline-block; animation:spin .7s linear infinite; vertical-align:-3px;}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .hint{font-size:12px; color:var(--muted); margin-top:8px; line-height:1.5;}
+  table.preview{width:100%; border-collapse:collapse; font-size:12px; margin-top:10px;}
+  table.preview th, table.preview td{border:1px solid var(--line); padding:6px 8px; text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:120px;}
+  table.preview th{background:var(--surface-2); color:var(--muted); font-weight:500;}
+  .table-scroll{overflow-x:auto;}
+  .history-item{font-size:12px; color:var(--muted); padding:6px 0; border-bottom:1px solid var(--line);}
+  .history-item b{color:var(--text);}
+  .drop-zone{border:2px dashed var(--line); border-radius:10px; padding:24px 16px; text-align:center; color:var(--muted); font-size:13px; cursor:pointer;}
+  .drop-zone.drag{border-color:var(--accent); color:var(--accent);}
+  .group-header{display:flex; align-items:center; gap:8px; margin:16px 0 8px; color:var(--muted); font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.05em;}
+  .group-header:first-child{margin-top:0;}
+  .group-header .line{flex:1; height:1px; background:var(--line);}
+  .group-header .cnt{background:var(--surface-2); padding:2px 8px; border-radius:999px; font-family:'IBM Plex Mono'; text-transform:none; letter-spacing:0;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="tag"></div>
+    <div><h1>자산택</h1><p>회사 비품 · 차량 · 장비 관리</p></div>
+  </div>
+  <nav>
+    <button data-view="assets" class="active">자산 목록</button>
+    <button data-view="bulk">엑셀 일괄등록</button>
+    <button data-view="ai">AI 명령</button>
+    <button data-view="dash">대시보드</button>
+  </nav>
+</header>
+
+<main>
+
+  <!-- ASSETS -->
+  <div class="view active" id="view-assets">
+    <div class="card">
+      <input type="text" id="search-input" placeholder="이름, 바코드/차량번호, 위치, 담당자로 검색">
+      <label style="margin-top:12px;">카테고리</label>
+      <div class="chip-row" id="category-filters" style="margin-top:6px;"></div>
+      <label style="margin-top:4px;">보관 위치</label>
+      <div class="chip-row" id="location-filters" style="margin-top:6px;"></div>
+      <label class="toggle-row" style="display:flex; align-items:center; gap:8px; margin-top:10px; color:var(--text); font-size:13px;">
+        <input type="checkbox" id="chk-group-location" style="width:auto; margin:0;"> 위치별로 묶어서 보기
+      </label>
+      <button class="secondary" id="btn-add-manual" style="margin-top:12px;">+ 자산 직접 등록</button>
+    </div>
+    <div id="asset-list"></div>
+  </div>
+
+  <!-- BULK IMPORT -->
+  <div class="view" id="view-bulk">
+    <div class="card">
+      <h2>엑셀/CSV로 일괄 등록</h2>
+      <p class="hint" style="margin-top:0;">차량 300대처럼 많은 자산을 한 번에 등록할 때 사용하세요. 첫 번째 행은 제목(헤더)이어야 합니다.</p>
+      <div class="drop-zone" id="drop-zone">
+        📄 파일을 선택하거나 여기로 끌어다 놓으세요<br><span style="font-size:11px;">.xlsx / .xls / .csv</span>
+        <input type="file" id="file-input" accept=".xlsx,.xls,.csv" style="display:none;">
+      </div>
+    </div>
+    <div id="bulk-mapping"></div>
+  </div>
+
+  <!-- AI COMMAND -->
+  <div class="view" id="view-ai">
+    <div class="card">
+      <h2>AI에게 물어보거나 명령하기</h2>
+      <div class="chip-row">
+        <div class="chip" data-prompt="점검이 필요하거나 오래 확인되지 않은 자산을 요약해줘">점검 필요 요약</div>
+        <div class="chip" data-prompt="카테고리별로 자산 현황을 분석해줘">카테고리 분석</div>
+        <div class="chip" data-prompt="분실 또는 상태가 이상한 자산이 있는지 확인해줘">이상 징후 확인</div>
+      </div>
+      <div class="chat-log" id="chat-log"></div>
+      <div class="row">
+        <input type="text" id="chat-input" placeholder='예: "12가3456 사용자를 김철수로 바꿔줘"'>
+        <button class="secondary" style="flex:0 0 70px;" id="btn-chat-send">전송</button>
+      </div>
+      <p class="hint">질문("어디 있지?")과 변경 명령("사용자를 ~로 바꿔줘") 둘 다 가능합니다. 변경 명령은 반드시 확인 후 적용됩니다.</p>
+    </div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div class="view" id="view-dash">
+    <div class="stat-grid" id="stat-grid"></div>
+    <div class="card"><h2>카테고리별 분포</h2><div id="category-bars"></div></div>
+    <div class="card"><h2>보관 위치별 분포</h2><div id="location-bars"></div></div>
+    <div class="card"><h2>상태별 현황</h2><div id="status-bars"></div></div>
+    <div class="card">
+      <button class="primary" id="btn-export-excel">📥 현재 자산 데이터 엑셀로 다운로드</button>
+      <p class="hint">등록된 모든 자산(차량 포함)을 엑셀 파일로 저장합니다. 백업용이나 보고용으로 활용하세요.</p>
+    </div>
+    <div class="card">
+      <button class="secondary" id="btn-ai-report">AI 이상 징후 분석 실행</button>
+      <div id="ai-report" style="margin-top:10px;"></div>
+    </div>
+    <div class="card">
+      <button class="secondary" id="btn-reset" style="border-color:#4a2020; color:var(--danger);">전체 데이터 초기화</button>
+    </div>
+  </div>
+
+</main>
+
+<!-- ADD/EDIT MODAL -->
+<div class="modal-bg" id="modal-bg">
+  <div class="modal">
+    <button class="close-x" id="modal-close">&times;</button>
+    <h3 id="modal-title">자산 등록</h3>
+    <div class="sub mono" id="modal-barcode"></div>
+
+    <label>자산명</label>
+    <div class="row">
+      <input type="text" id="f-name" placeholder="예: 그랜저 IG (차량) / 삼성 모니터 27인치">
+      <button class="small" id="btn-ai-classify" style="flex:0 0 110px;">✨ AI 자동분류</button>
+    </div>
+
+    <label>카테고리 (차종 코드 등 자유 입력)</label>
+    <input type="text" id="f-category" list="dl-category" placeholder="예: LMC, LPU, 버스, 사무기기 등">
+    <datalist id="dl-category"></datalist>
+
+    <label>보관 위치</label>
+    <input type="text" id="f-location" placeholder="예: 본사 지하주차장 / 3층 사무실">
+    <label>담당자 / 사용자</label>
+    <input type="text" id="f-assignee" placeholder="예: 홍길동">
+    <label>상태</label>
+    <select id="f-status">
+      <option value="ok">정상</option><option value="check">점검 필요</option>
+      <option value="lost">분실</option><option value="retired">폐기</option>
+    </select>
+    <label>메모</label>
+    <textarea id="f-notes" rows="2" placeholder="추가 정보"></textarea>
+
+    <button class="primary" id="btn-save-asset" style="margin-top:16px;">저장</button>
+    <button class="secondary" id="btn-delete-asset" style="margin-top:8px; display:none; border-color:#4a2020; color:var(--danger);">이 자산 삭제</button>
+
+    <div id="history-section" style="margin-top:16px; display:none;">
+      <label style="margin-top:0;">변경 이력</label>
+      <div id="history-list"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------------- storage ---------------- */
+const STORE_KEY = 'assets-data';
+let assets = {};
+let editingBarcode = null;
+
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(window._toastT);
+  window._toastT = setTimeout(()=>t.classList.remove('show'), 2600);
+}
+
+async function loadAssets(){
+  try{
+    const res = await window.storage.get(STORE_KEY, true);
+    assets = res ? JSON.parse(res.value) : {};
+  }catch(e){ assets = {}; }
+}
+async function saveAssets(){
+  try{
+    const ok = await window.storage.set(STORE_KEY, JSON.stringify(assets), true);
+    if(!ok) toast('저장에 실패했습니다. 다시 시도해주세요.');
+  }catch(e){ toast('저장 오류: ' + e.message); }
+}
+
+function daysSince(iso){ if(!iso) return null; return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000); }
+function checkBadge(d){
+  if(d === null) return '<span class="badge muted">미확인</span>';
+  if(d <= 30) return `<span class="badge ok">${d}일 전 확인</span>`;
+  if(d <= 90) return `<span class="badge warn">${d}일 전 확인</span>`;
+  return `<span class="badge danger">${d}일 전 확인 · 점검필요</span>`;
+}
+function statusBadge(s){
+  const map = {ok:['정상','ok'], check:['점검 필요','warn'], lost:['분실','danger'], retired:['폐기','muted']};
+  const [label, cls] = map[s] || ['정상','ok'];
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+function escapeHtml(s){
+  return String(s ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function addHistory(barcode, field, from, to, via){
+  if(!assets[barcode]) return;
+  if(!assets[barcode].history) assets[barcode].history = [];
+  assets[barcode].history.unshift({date:new Date().toISOString(), field, from: from||'(없음)', to, via});
+  if(assets[barcode].history.length > 30) assets[barcode].history.length = 30;
+}
+const FIELD_LABEL = {name:'자산명', category:'카테고리', location:'위치', assignee:'담당자', status:'상태', notes:'메모'};
+
+/* ---------------- nav ---------------- */
+document.querySelectorAll('nav button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    document.getElementById('view-'+btn.dataset.view).classList.add('active');
+    if(btn.dataset.view === 'assets') renderAssetList();
+    if(btn.dataset.view === 'dash') renderDashboard();
+  });
+});
+
+/* ---------------- modal ---------------- */
+const modalBg = document.getElementById('modal-bg');
+function openModal(barcode, isNew){
+  editingBarcode = barcode;
+  const rec = assets[barcode] || {};
+  document.getElementById('modal-title').textContent = isNew || !assets[barcode] ? '자산 등록' : '자산 정보 수정';
+  document.getElementById('modal-barcode').textContent = barcode;
+  document.getElementById('f-name').value = rec.name || '';
+  document.getElementById('f-category').value = rec.category || '';
+  document.getElementById('f-location').value = rec.location || '';
+  document.getElementById('f-assignee').value = rec.assignee || '';
+  document.getElementById('f-status').value = rec.status || 'ok';
+  document.getElementById('f-notes').value = rec.notes || '';
+  document.getElementById('btn-delete-asset').style.display = assets[barcode] ? 'block' : 'none';
+  const histSec = document.getElementById('history-section');
+  if(rec.history && rec.history.length){
+    histSec.style.display = 'block';
+    document.getElementById('history-list').innerHTML = rec.history.slice(0,10).map(h=>
+      `<div class="history-item">${new Date(h.date).toLocaleString('ko-KR')} · <b>${FIELD_LABEL[h.field]||h.field}</b>: ${escapeHtml(h.from)} → <b>${escapeHtml(h.to)}</b> ${h.via==='ai'?'(AI 명령)':''}</div>`
+    ).join('');
+  }else{ histSec.style.display = 'none'; }
+  modalBg.classList.add('active');
+}
+document.getElementById('modal-close').addEventListener('click', ()=> modalBg.classList.remove('active'));
+modalBg.addEventListener('click', e=>{ if(e.target === modalBg) modalBg.classList.remove('active'); });
+document.getElementById('btn-add-manual').addEventListener('click', ()=>{
+  openModal('MANUAL-' + Date.now().toString().slice(-8), true);
+});
+document.getElementById('btn-save-asset').addEventListener('click', async ()=>{
+  const name = document.getElementById('f-name').value.trim();
+  if(!name){ toast('자산명을 입력해주세요.'); return; }
+  const existed = !!assets[editingBarcode];
+  const prev = assets[editingBarcode] || {};
+  const next = {
+    name, category: document.getElementById('f-category').value,
+    location: document.getElementById('f-location').value.trim(),
+    assignee: document.getElementById('f-assignee').value.trim(),
+    status: document.getElementById('f-status').value,
+    notes: document.getElementById('f-notes').value.trim(),
+    addedDate: prev.addedDate || new Date().toISOString(),
+    lastChecked: new Date().toISOString(),
+    history: prev.history || []
+  };
+  if(existed){
+    ['name','category','location','assignee','status','notes'].forEach(f=>{
+      if((prev[f]||'') !== (next[f]||'')) addHistory(editingBarcode, f, prev[f], next[f], 'manual');
+    });
+  }
+  assets[editingBarcode] = next;
+  await saveAssets();
+  modalBg.classList.remove('active');
+  toast(existed ? '수정되었습니다.' : '자산이 등록되었습니다.');
+  renderAssetList();
+});
+document.getElementById('btn-delete-asset').addEventListener('click', async ()=>{
+  if(!confirm('이 자산을 삭제할까요? 되돌릴 수 없습니다.')) return;
+  delete assets[editingBarcode];
+  await saveAssets();
+  modalBg.classList.remove('active');
+  toast('삭제되었습니다.');
+  renderAssetList();
+});
+
+/* ---------------- AI classify ---------------- */
+document.getElementById('btn-ai-classify').addEventListener('click', async ()=>{
+  const name = document.getElementById('f-name').value.trim();
+  if(!name){ toast('먼저 자산명을 입력해주세요.'); return; }
+  const btn = document.getElementById('btn-ai-classify');
+  const original = btn.textContent;
+  btn.innerHTML = '<span class="spin"></span>'; btn.disabled = true;
+  try{
+    const existingCats = distinctCategories();
+    const prompt = `너는 회사 자산/차량 관리 보조원이야. 다음 자산명을 보고 적절한 카테고리를 제안해줘.
+현재 사용 중인 카테고리 예시: ${existingCats.length ? existingCats.join(', ') : '(아직 없음)'}
+가능하면 기존 카테고리 중 하나를 재사용하고, 마땅한 것이 없으면 새로운 짧은 카테고리명을 만들어줘 (예: 차량 코드 체계라면 LMC, LPU 같은 형식, 일반 비품이면 "사무기기" 같은 형식).
+자산명: "${name}"
+반드시 JSON만 응답해. 형식: {"category":"카테고리명","suggested_notes":"한 문장 메모(선택, 없으면 빈 문자열)"}`;
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:300, messages:[{role:'user', content:prompt}] })
+    });
+    const data = await res.json();
+    const text = (data.content || []).filter(b=>b.type==='text').map(b=>b.text).join('');
+    const parsed = JSON.parse(text.replace(/```json|```/g,'').trim());
+    if(parsed.category) document.getElementById('f-category').value = parsed.category;
+    if(parsed.suggested_notes && !document.getElementById('f-notes').value) document.getElementById('f-notes').value = parsed.suggested_notes;
+    toast('AI가 카테고리를 제안했습니다.');
+  }catch(e){ toast('AI 분류에 실패했습니다. 직접 입력해주세요.'); }
+  finally{ btn.textContent = original; btn.disabled = false; }
+});
+
+/* ---------------- asset list ---------------- */
+let activeCat = '전체';
+let activeLocation = '전체';
+
+function distinctCategories(){
+  const set = new Set();
+  Object.values(assets).forEach(r=>{ if(r.category && r.category.trim()) set.add(r.category.trim()); });
+  return Array.from(set).sort((a,b)=> a.localeCompare(b, 'ko'));
+}
+
+function buildCategoryFilters(){
+  const el = document.getElementById('category-filters');
+  const cats = distinctCategories();
+  if(cats.length === 0){ el.innerHTML = '<span class="hint" style="margin:0;">등록된 카테고리가 없습니다.</span>'; return; }
+  const options = ['전체', ...cats];
+  el.innerHTML = options.map(c=>`<div class="chip ${c===activeCat?'active':''}" data-cat="${escapeHtml(c)}">${escapeHtml(c)}</div>`).join('');
+  el.querySelectorAll('.chip').forEach(chip=>{
+    chip.addEventListener('click', ()=>{ activeCat = chip.dataset.cat; buildCategoryFilters(); renderAssetList(); });
+  });
+  // also refresh the datalist used in the add/edit modal
+  const dl = document.getElementById('dl-category');
+  if(dl) dl.innerHTML = cats.map(c=>`<option value="${escapeHtml(c)}">`).join('');
+}
+
+function distinctLocations(){
+  const set = new Set();
+  Object.values(assets).forEach(r=>{ if(r.location && r.location.trim()) set.add(r.location.trim()); });
+  return Array.from(set).sort((a,b)=> a.localeCompare(b, 'ko'));
+}
+
+function buildLocationFilters(){
+  const el = document.getElementById('location-filters');
+  const locs = distinctLocations();
+  if(locs.length === 0){ el.innerHTML = '<span class="hint" style="margin:0;">등록된 위치가 없습니다.</span>'; return; }
+  const options = ['전체', ...locs, '(위치 미상)'];
+  el.innerHTML = options.map(loc=>`<div class="chip ${loc===activeLocation?'active':''}" data-loc="${escapeHtml(loc)}">${escapeHtml(loc)}</div>`).join('');
+  el.querySelectorAll('.chip').forEach(chip=>{
+    chip.addEventListener('click', ()=>{ activeLocation = chip.dataset.loc; buildLocationFilters(); renderAssetList(); });
+  });
+}
+
+document.getElementById('search-input').addEventListener('input', renderAssetList);
+document.getElementById('chk-group-location').addEventListener('change', renderAssetList);
+
+function assetItemHtml(code, r){
+  return `
+    <div class="asset-item" data-code="${code}">
+      <div class="strip"></div>
+      <div class="body">
+        <div class="top"><span class="name">${escapeHtml(r.name)}</span>${statusBadge(r.status)}</div>
+        <div class="meta">${escapeHtml(r.category)} · ${escapeHtml(r.location||'위치 미상')} · ${escapeHtml(r.assignee||'담당자 미상')}</div>
+        <div class="code mono">${code}</div>
+        <div style="margin-top:6px;">${checkBadge(daysSince(r.lastChecked))}</div>
+      </div>
+    </div>`;
+}
+
+function renderAssetList(){
+  buildCategoryFilters();
+  buildLocationFilters();
+  const q = document.getElementById('search-input').value.trim().toLowerCase();
+  const grouping = document.getElementById('chk-group-location').checked;
+  const list = document.getElementById('asset-list');
+  let entries = Object.entries(assets);
+
+  if(activeCat !== '전체') entries = entries.filter(([,r])=> r.category === activeCat);
+  if(activeLocation !== '전체'){
+    if(activeLocation === '(위치 미상)') entries = entries.filter(([,r])=> !r.location || !r.location.trim());
+    else entries = entries.filter(([,r])=> (r.location||'').trim() === activeLocation);
+  }
+  if(q){
+    entries = entries.filter(([code,r])=>
+      (r.name||'').toLowerCase().includes(q) || code.toLowerCase().includes(q) ||
+      (r.location||'').toLowerCase().includes(q) || (r.assignee||'').toLowerCase().includes(q));
+  }
+
+  if(entries.length === 0){
+    list.innerHTML = `<div class="empty"><div class="big">📦</div>조건에 맞는 자산이 없습니다.<br>필터를 초기화하거나 새로 등록해보세요.</div>`;
+    return;
+  }
+
+  if(grouping){
+    const groups = {};
+    entries.forEach(([code,r])=>{
+      const key = (r.location && r.location.trim()) ? r.location.trim() : '위치 미상';
+      if(!groups[key]) groups[key] = [];
+      groups[key].push([code,r]);
+    });
+    const keys = Object.keys(groups).sort((a,b)=> a==='위치 미상' ? 1 : b==='위치 미상' ? -1 : a.localeCompare(b,'ko'));
+    list.innerHTML = keys.map(key=>{
+      const items = groups[key].sort((a,b)=> (daysSince(b[1].lastChecked) ?? 9999) - (daysSince(a[1].lastChecked) ?? 9999));
+      return `<div class="group-header">${escapeHtml(key)}<div class="line"></div><span class="cnt">${items.length}</span></div>`
+        + items.map(([code,r])=> assetItemHtml(code,r)).join('');
+    }).join('');
+  }else{
+    entries.sort((a,b)=> (daysSince(b[1].lastChecked) ?? 9999) - (daysSince(a[1].lastChecked) ?? 9999));
+    list.innerHTML = entries.map(([code, r])=> assetItemHtml(code,r)).join('');
+  }
+
+  list.querySelectorAll('.asset-item').forEach(item=>{
+    item.addEventListener('click', ()=> openModal(item.dataset.code));
+  });
+}
+
+/* ---------------- bulk import (excel/csv) ---------------- */
+const FIELD_DEFS = [
+  {key:'barcode', label:'식별자(바코드/차량번호) *필수', keywords:['바코드','차량번호','차량 번호','plate','번호판','식별','코드','id']},
+  {key:'name', label:'자산명 *필수', keywords:['자산명','이름','품명','name','차종','모델']},
+  {key:'category', label:'카테고리', keywords:['카테고리','분류','category','구분']},
+  {key:'location', label:'위치', keywords:['위치','장소','location','보관']},
+  {key:'assignee', label:'담당자/사용자', keywords:['담당자','사용자','운전자','assignee','user']},
+  {key:'status', label:'상태', keywords:['상태','status']},
+  {key:'notes', label:'메모', keywords:['메모','비고','notes','설명']},
+];
+let parsedHeaders = [];
+let parsedRows = [];
+
+function guessColumn(kw){
+  const idx = parsedHeaders.findIndex(h => kw.some(k => String(h).toLowerCase().includes(k.toLowerCase())));
+  return idx;
+}
+function normalizeStatus(v){
+  const s = String(v||'').trim();
+  if(!s) return 'ok';
+  if(/분실|lost/i.test(s)) return 'lost';
+  if(/폐기|매각|retired|폐차/i.test(s)) return 'retired';
+  if(/점검|수리|정비|check/i.test(s)) return 'check';
+  return 'ok';
+}
+
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+dropZone.addEventListener('click', ()=> fileInput.click());
+dropZone.addEventListener('dragover', e=>{ e.preventDefault(); dropZone.classList.add('drag'); });
+dropZone.addEventListener('dragleave', ()=> dropZone.classList.remove('drag'));
+dropZone.addEventListener('drop', e=>{
+  e.preventDefault(); dropZone.classList.remove('drag');
+  if(e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', e=>{ if(e.target.files[0]) handleFile(e.target.files[0]); });
+
+function handleFile(file){
+  const reader = new FileReader();
+  reader.onload = (e)=>{
+    try{
+      const wb = XLSX.read(e.target.result, {type:'array'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const json = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+      if(json.length < 2){ toast('파일에 데이터가 없습니다.'); return; }
+      parsedHeaders = json[0].map(h=>String(h).trim());
+      parsedRows = json.slice(1).filter(r=> r.some(c=> String(c).trim() !== ''));
+      renderMapping(file.name);
+    }catch(err){ toast('파일을 읽는 중 오류가 발생했습니다: ' + err.message); }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function renderMapping(filename){
+  const box = document.getElementById('bulk-mapping');
+  const selectsHtml = FIELD_DEFS.map(f=>{
+    const guess = guessColumn(f.keywords);
+    const options = ['<option value="-1">(매핑 안함)</option>'].concat(
+      parsedHeaders.map((h,i)=>`<option value="${i}" ${i===guess?'selected':''}>${escapeHtml(h)}</option>`)
+    ).join('');
+    return `<label>${f.label}</label><select data-field="${f.key}">${options}</select>`;
+  }).join('');
+
+  box.innerHTML = `
+    <div class="card">
+      <h2>열 매핑 — ${escapeHtml(filename)} (${parsedRows.length}행 발견)</h2>
+      ${selectsHtml}
+      <div class="table-scroll">
+        <table class="preview" id="preview-table"></table>
+      </div>
+      <button class="primary" id="btn-run-import" style="margin-top:14px;">가져오기 실행 (${parsedRows.length}건)</button>
+      <div id="import-summary" style="margin-top:10px;"></div>
+    </div>`;
+  box.querySelectorAll('select').forEach(s=> s.addEventListener('change', updatePreview));
+  updatePreview();
+}
+
+function currentMapping(){
+  const map = {};
+  document.querySelectorAll('#bulk-mapping select[data-field]').forEach(s=>{
+    map[s.dataset.field] = parseInt(s.value, 10);
+  });
+  return map;
+}
+
+function updatePreview(){
+  const map = currentMapping();
+  const table = document.getElementById('preview-table');
+  const cols = FIELD_DEFS.filter(f => map[f.key] >= 0);
+  let html = '<tr>' + cols.map(c=>`<th>${c.label.replace(' *필수','')}</th>`).join('') + '</tr>';
+  parsedRows.slice(0,5).forEach(row=>{
+    html += '<tr>' + cols.map(c=> `<td>${escapeHtml(row[map[c.key]] ?? '')}</td>`).join('') + '</tr>';
+  });
+  table.innerHTML = html;
+}
+
+document.getElementById('bulk-mapping').addEventListener('click', async (e)=>{
+  if(e.target.id !== 'btn-run-import') return;
+  const map = currentMapping();
+  if(map.barcode < 0 || map.name < 0){
+    toast('식별자(바코드/차량번호)와 자산명은 반드시 매핑해야 합니다.');
+    return;
+  }
+  const btn = e.target;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span> 가져오는 중...';
+  let created = 0, updated = 0, skipped = 0;
+  parsedRows.forEach(row=>{
+    const barcode = String(row[map.barcode] ?? '').trim();
+    const name = String(row[map.name] ?? '').trim();
+    if(!barcode || !name){ skipped++; return; }
+    const existed = !!assets[barcode];
+    const prev = assets[barcode] || {};
+    assets[barcode] = {
+      name,
+      category: map.category >= 0 ? (String(row[map.category]||'').trim() || prev.category || '기타') : (prev.category || '기타'),
+      location: map.location >= 0 ? String(row[map.location]||'').trim() : (prev.location || ''),
+      assignee: map.assignee >= 0 ? String(row[map.assignee]||'').trim() : (prev.assignee || ''),
+      status: map.status >= 0 ? normalizeStatus(row[map.status]) : (prev.status || 'ok'),
+      notes: map.notes >= 0 ? String(row[map.notes]||'').trim() : (prev.notes || ''),
+      addedDate: prev.addedDate || new Date().toISOString(),
+      lastChecked: prev.lastChecked || new Date().toISOString(),
+      history: prev.history || []
+    };
+    if(existed){ addHistory(barcode, 'name', prev.name, name, 'import'); updated++; } else created++;
+  });
+  await saveAssets();
+  btn.disabled = false;
+  btn.textContent = `가져오기 실행 (${parsedRows.length}건)`;
+  document.getElementById('import-summary').innerHTML =
+    `<p class="hint" style="color:var(--ok);">완료: 신규 ${created}건 · 업데이트 ${updated}건 ${skipped?`· 건너뜀 ${skipped}건(식별자/이름 누락)`:''}</p>`;
+  toast('가져오기가 완료되었습니다.');
+  renderAssetList();
+});
+
+/* ---------------- dashboard ---------------- */
+function renderDashboard(){
+  const entries = Object.entries(assets);
+  const total = entries.length;
+  const needCheck = entries.filter(([,r])=> (daysSince(r.lastChecked) ?? 9999) > 90).length;
+  const lost = entries.filter(([,r])=> r.status === 'lost').length;
+  document.getElementById('stat-grid').innerHTML = `
+    <div class="stat"><div class="num">${total}</div><div class="lbl">전체 자산</div></div>
+    <div class="stat"><div class="num" style="color:${needCheck?'var(--warn)':'var(--text)'}">${needCheck}</div><div class="lbl">90일+ 미확인</div></div>
+    <div class="stat"><div class="num" style="color:${lost?'var(--danger)':'var(--text)'}">${lost}</div><div class="lbl">분실 처리</div></div>
+    <div class="stat"><div class="num">${distinctCategories().length}</div><div class="lbl">카테고리 수</div></div>`;
+  const byCat = {};
+  entries.forEach(([,r])=>{ byCat[r.category] = (byCat[r.category]||0) + 1; });
+  const maxCat = Math.max(1, ...Object.values(byCat));
+  document.getElementById('category-bars').innerHTML = Object.entries(byCat).length ?
+    Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([cat,cnt])=>`
+      <div class="bar-row"><div class="lbl">${escapeHtml(cat)}</div><div class="bar-track"><div class="bar-fill" style="width:${(cnt/maxCat*100)}%"></div></div><div class="cnt">${cnt}</div></div>`).join('')
+    : '<p class="hint">데이터가 없습니다.</p>';
+  const byLoc = {};
+  entries.forEach(([,r])=>{
+    const key = (r.location && r.location.trim()) ? r.location.trim() : '위치 미상';
+    byLoc[key] = (byLoc[key]||0) + 1;
+  });
+  const maxLoc = Math.max(1, ...Object.values(byLoc));
+  document.getElementById('location-bars').innerHTML = Object.keys(byLoc).length ?
+    Object.entries(byLoc).sort((a,b)=>b[1]-a[1]).map(([loc,cnt])=>`
+      <div class="bar-row"><div class="lbl" title="${escapeHtml(loc)}">${escapeHtml(loc)}</div><div class="bar-track"><div class="bar-fill" style="width:${(cnt/maxLoc*100)}%"></div></div><div class="cnt">${cnt}</div></div>`).join('')
+    : '<p class="hint">데이터가 없습니다.</p>';
+
+  const byStatus = {ok:0, check:0, lost:0, retired:0};
+  entries.forEach(([,r])=>{ byStatus[r.status] = (byStatus[r.status]||0) + 1; });
+  const statusLabels = {ok:'정상', check:'점검필요', lost:'분실', retired:'폐기'};
+  const maxSt = Math.max(1, ...Object.values(byStatus));
+  document.getElementById('status-bars').innerHTML = Object.entries(byStatus).map(([st,cnt])=>`
+      <div class="bar-row"><div class="lbl">${statusLabels[st]}</div><div class="bar-track"><div class="bar-fill" style="width:${(cnt/maxSt*100)}%"></div></div><div class="cnt">${cnt}</div></div>`).join('');
+}
+document.getElementById('btn-reset').addEventListener('click', async ()=>{
+  if(!confirm('모든 자산 데이터를 삭제합니다. 계속할까요?')) return;
+  assets = {}; await saveAssets(); toast('초기화되었습니다.'); renderAssetList(); renderDashboard();
+});
+
+/* ---------------- AI chat + command ---------------- */
+function assetIndexForAI(){
+  return Object.entries(assets).map(([code,r])=>({
+    barcode:code, name:r.name, category:r.category, location:r.location,
+    assignee:r.assignee, status:r.status, daysSinceCheck: daysSince(r.lastChecked)
+  }));
+}
+function appendMsg(role, html){
+  const log = document.getElementById('chat-log');
+  const div = document.createElement('div');
+  div.className = 'msg ' + role;
+  div.innerHTML = html;
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+  return div;
+}
+
+async function askAI(userText){
+  appendMsg('user', escapeHtml(userText));
+  const pending = appendMsg('ai', '<span class="spin"></span> 생각 중...');
+
+  try{
+    const index = JSON.stringify(assetIndexForAI());
+    const prompt = `너는 회사 자산/차량 관리 AI 비서야. 아래는 현재 등록된 자산 목록(요약)이야:
+${index}
+
+사용자 입력: "${userText}"
+
+이 입력이 (a) 단순 질문/조회인지 (b) 특정 자산 하나를 지목해 필드를 변경하려는 명령인지 (c) 조건에 맞는 여러 자산을 한번에 변경하려는 명령인지 (d) 무엇을 원하는지 불분명한지 판단해.
+반드시 아래 JSON 형식으로만 응답하고 다른 텍스트는 절대 포함하지 마:
+
+질문(a)인 경우: {"intent":"query","answer":"실제 데이터에 근거한 한국어 답변(3~6문장 이내)"}
+단일 변경(b)인 경우: {"intent":"update","target_query":"자산을 식별할 검색어(차량번호/이름 일부 등, 최대한 짧고 정확하게)","field":"assignee|location|status|category|notes|name","new_value":"새 값"}
+조건부 다중 변경(c)인 경우: {"intent":"bulk_update","target_query":"필터링에 쓸 검색어(예: 기존 담당자 이름, 위치명 등)","field":"assignee|location|status|category|notes|name","new_value":"새 값"}
+불분명(d)인 경우: {"intent":"unclear","answer":"어떤 정보가 더 필요한지 한국어로 짧게"}
+
+status 값을 바꾸는 경우 new_value는 반드시 ok, check, lost, retired 중 하나여야 해(정상=ok, 점검필요=check, 분실=lost, 폐기=retired).
+목록에 없는 내용은 추측하지 말고 모른다고 해.`;
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:600, messages:[{role:'user', content:prompt}] })
+    });
+    const data = await res.json();
+    const text = (data.content || []).filter(b=>b.type==='text').map(b=>b.text).join('');
+    let parsed;
+    try{ parsed = JSON.parse(text.replace(/```json|```/g,'').trim()); }
+    catch(e){ parsed = {intent:'query', answer: text || '응답을 이해하지 못했습니다.'}; }
+
+    pending.remove();
+
+    if(parsed.intent === 'query' || parsed.intent === 'unclear'){
+      appendMsg('ai', escapeHtml(parsed.answer || '답변을 생성하지 못했습니다.'));
+      return;
+    }
+    if(parsed.intent === 'update' || parsed.intent === 'bulk_update'){
+      handleUpdateIntent(parsed);
+      return;
+    }
+    appendMsg('ai', '요청을 이해하지 못했습니다. 다르게 표현해 주세요.');
+  }catch(e){
+    pending.remove();
+    appendMsg('ai', '오류가 발생했습니다: ' + escapeHtml(e.message));
+  }
+}
+
+function findMatches(query){
+  const q = String(query||'').trim().toLowerCase();
+  if(!q) return [];
+  // exact barcode match first
+  const exact = Object.keys(assets).find(code => code.toLowerCase() === q);
+  if(exact) return [exact];
+  return Object.entries(assets).filter(([code, r])=>
+    code.toLowerCase().includes(q) ||
+    (r.name||'').toLowerCase().includes(q) ||
+    (r.assignee||'').toLowerCase().includes(q) ||
+    (r.location||'').toLowerCase().includes(q) ||
+    (r.category||'').toLowerCase().includes(q)
+  ).map(([code])=>code);
+}
+
+function handleUpdateIntent(parsed){
+  const matches = findMatches(parsed.target_query);
+  const field = parsed.field;
+  const newValue = field === 'status' ? normalizeStatus(parsed.new_value) : parsed.new_value;
+
+  if(!FIELD_LABEL[field]){
+    appendMsg('ai', `알 수 없는 항목(${escapeHtml(field||'')})을 변경하려고 해서 처리할 수 없습니다.`);
+    return;
+  }
+  if(matches.length === 0){
+    appendMsg('ai', `"${escapeHtml(parsed.target_query)}"에 해당하는 자산을 찾지 못했습니다. 차량번호나 이름을 정확히 입력해 다시 시도해주세요.`);
+    return;
+  }
+
+  const displayValue = (f,v) => f==='status' ? ({ok:'정상',check:'점검 필요',lost:'분실',retired:'폐기'}[v]||v) : v;
+  const rows = matches.slice(0,15).map(code=>{
+    const r = assets[code];
+    const from = r[field] || '(없음)';
+    return `<div class="match-card" data-code="${code}">
+      <div><b>${escapeHtml(r.name)}</b> <span class="mono" style="color:var(--muted); font-size:11px;">${escapeHtml(code)}</span></div>
+      <div class="diff"><span>${FIELD_LABEL[field]}: </span><span class="from">${escapeHtml(displayValue(field, from))}</span> → <span class="to">${escapeHtml(displayValue(field, newValue))}</span></div>
+    </div>`;
+  }).join('');
+
+  const moreNote = matches.length > 15 ? `<p class="hint">그 외 ${matches.length-15}건 더 있음 (검색어를 더 구체적으로 입력해주세요)</p>` : '';
+
+  const html = `
+    <div>${matches.length === 1 ? '이 자산을 찾았습니다:' : `${matches.length}건이 검색되었습니다:`}</div>
+    ${rows}
+    ${moreNote}
+    <div class="match-actions">
+      <button class="primary btn-apply-all" style="flex:1;">전체 적용 (${Math.min(matches.length,15)}건)</button>
+      <button class="secondary btn-cancel-apply" style="flex:1;">취소</button>
+    </div>`;
+  const div = appendMsg('ai', html);
+
+  div.querySelector('.btn-cancel-apply').addEventListener('click', ()=>{
+    div.querySelector('.match-actions').innerHTML = '<span class="hint">취소되었습니다.</span>';
+  });
+  div.querySelector('.btn-apply-all').addEventListener('click', async ()=>{
+    div.querySelectorAll('.match-card').forEach(card=>{
+      const code = card.dataset.code;
+      const prevVal = assets[code][field] || '';
+      assets[code][field] = newValue;
+      assets[code].lastChecked = new Date().toISOString();
+      addHistory(code, field, prevVal, newValue, 'ai');
+    });
+    await saveAssets();
+    div.querySelector('.match-actions').innerHTML = `<span class="hint" style="color:var(--ok);">✓ ${Math.min(matches.length,15)}건 적용 완료</span>`;
+    toast('AI 명령이 적용되었습니다.');
+    renderAssetList();
+  });
+}
+
+document.getElementById('btn-chat-send').addEventListener('click', ()=>{
+  const inp = document.getElementById('chat-input');
+  const v = inp.value.trim();
+  if(!v) return;
+  inp.value = '';
+  askAI(v);
+});
+document.getElementById('chat-input').addEventListener('keydown', e=>{
+  if(e.key === 'Enter'){ e.preventDefault(); document.getElementById('btn-chat-send').click(); }
+});
+document.querySelectorAll('.chip[data-prompt]').forEach(chip=>{
+  chip.addEventListener('click', ()=> askAI(chip.dataset.prompt));
+});
+
+document.getElementById('btn-export-excel').addEventListener('click', ()=>{
+  const statusLabels = {ok:'정상', check:'점검 필요', lost:'분실', retired:'폐기'};
+  const rows = Object.entries(assets).map(([code, r])=>({
+    '바코드/식별자': code,
+    '자산명': r.name || '',
+    '카테고리': r.category || '',
+    '보관위치': r.location || '',
+    '담당자/사용자': r.assignee || '',
+    '상태': statusLabels[r.status] || r.status || '',
+    '마지막 확인일': r.lastChecked ? new Date(r.lastChecked).toLocaleString('ko-KR') : '',
+    '경과일수': daysSince(r.lastChecked) ?? '',
+    '등록일': r.addedDate ? new Date(r.addedDate).toLocaleString('ko-KR') : '',
+    '메모': r.notes || ''
+  }));
+  if(rows.length === 0){ toast('내보낼 데이터가 없습니다.'); return; }
+  try{
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [{wch:16},{wch:24},{wch:14},{wch:20},{wch:22},{wch:12},{wch:20},{wch:10},{wch:20},{wch:30}];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '자산현황');
+    const ts = new Date().toISOString().slice(0,10);
+    XLSX.writeFile(wb, `자산현황_${ts}.xlsx`);
+    toast('엑셀 파일이 다운로드되었습니다.');
+  }catch(e){ toast('내보내기 실패: ' + e.message); }
+});
+
+document.getElementById('btn-ai-report').addEventListener('click', async ()=>{
+  const box = document.getElementById('ai-report');
+  box.innerHTML = '<p class="hint"><span class="spin"></span> 분석 중...</p>';
+  try{
+    const index = JSON.stringify(assetIndexForAI());
+    const prompt = `너는 회사 자산 관리 AI 비서야. 아래 자산 목록(JSON)을 분석해서 이상 징후를 찾아줘: 90일 이상 미확인, 상태가 "lost"이거나 "check"인 자산, 위치/담당자 정보가 비어있는 자산 등.
+${index}
+한국어로 짧은 불릿 리스트로, 실제 데이터에 근거해서만 답해. 문제 없으면 "특이사항 없음"이라고 답해.`;
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:800, messages:[{role:'user', content:prompt}] })
+    });
+    const data = await res.json();
+    const text = (data.content || []).filter(b=>b.type==='text').map(b=>b.text).join('') || '분석 결과를 받지 못했습니다.';
+    box.innerHTML = `<div class="msg ai" style="max-width:100%;">${escapeHtml(text)}</div>`;
+  }catch(e){ box.innerHTML = `<p class="hint">분석 오류: ${escapeHtml(e.message)}</p>`; }
+});
+
+/* ---------------- init ---------------- */
+(async function init(){
+  await loadAssets();
+  renderAssetList();
+  renderDashboard();
+})();
+</script>
+</body>
+</html>
