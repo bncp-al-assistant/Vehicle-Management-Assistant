@@ -1,1 +1,11 @@
+# Cloudflare Workers 빌드 설정 (GitHub 연결 자동 배포용)
+name = "vehicle-management-assistant"
+main = "src/worker.js"
+compatibility_date = "2025-01-01"
 
+# 대시보드에서 넣은 변수(APP_ACCESS_TOKEN, AI_MODEL 등)를 배포 때 지우지 않음
+keep_vars = true
+
+[[kv_namespaces]]
+binding = "ASSETS_KV"
+id = "여기에_assets-kv의_네임스페이스_ID_붙여넣기"
